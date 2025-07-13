@@ -8,6 +8,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import datetime
 import os
+from queue_manager import queue_manager
 
 class WaitTimePredictionModel:
     def __init__(self):
@@ -158,6 +159,117 @@ def parse_time_input(time_str):
     except:
         return 720  # Default to 12:00 PM if parsing fails
 
+# Queue Management Endpoints
+@app.route('/api/queue/join', methods=['POST'])
+def join_queue():
+    """Join a queue"""
+    try:
+        data = request.json
+        shop_id = data.get('shop_id')
+        customer_name = data.get('customer_name')
+        phone_number = data.get('phone_number')
+        
+        if not all([shop_id, customer_name, phone_number]):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        customer_data = queue_manager.join_queue(shop_id, customer_name, phone_number)
+        
+        return jsonify({
+            'status': 'success',
+            'customer_data': customer_data
+        })
+    
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': 'Failed to join queue'}), 500
+
+@app.route('/api/queue/status/<shop_id>', methods=['GET'])
+def get_queue_status(shop_id):
+    """Get queue status for a shop"""
+    try:
+        queue_status = queue_manager.get_queue_status(shop_id)
+        
+        if queue_status is None:
+            return jsonify({'error': 'Queue not found'}), 404
+        
+        return jsonify({
+            'status': 'success',
+            'queue_data': queue_status
+        })
+    
+    except Exception as e:
+        return jsonify({'error': 'Failed to get queue status'}), 500
+
+@app.route('/api/customer/status/<customer_id>', methods=['GET'])
+def get_customer_status(customer_id):
+    """Get customer status"""
+    try:
+        customer_status = queue_manager.get_customer_status(customer_id)
+        
+        if customer_status is None:
+            return jsonify({'error': 'Customer not found'}), 404
+        
+        return jsonify({
+            'status': 'success',
+            'customer_data': customer_status
+        })
+    
+    except Exception as e:
+        return jsonify({'error': 'Failed to get customer status'}), 500
+
+@app.route('/api/queue/serve/<shop_id>', methods=['POST'])
+def serve_next_customer(shop_id):
+    """Serve next customer"""
+    try:
+        served_customer = queue_manager.serve_next_customer(shop_id)
+        
+        if served_customer is None:
+            return jsonify({'error': 'No customers in queue'}), 400
+        
+        return jsonify({
+            'status': 'success',
+            'served_customer': served_customer
+        })
+    
+    except Exception as e:
+        return jsonify({'error': 'Failed to serve customer'}), 500
+
+@app.route('/api/queue/settings/<shop_id>', methods=['PUT'])
+def update_queue_settings(shop_id):
+    """Update queue settings"""
+    try:
+        data = request.json
+        
+        success = queue_manager.update_queue_settings(
+            shop_id,
+            active_counters=data.get('active_counters'),
+            avg_service_time=data.get('avg_service_time'),
+            is_active=data.get('is_active')
+        )
+        
+        if not success:
+            return jsonify({'error': 'Queue not found'}), 404
+        
+        return jsonify({'status': 'success'})
+    
+    except Exception as e:
+        return jsonify({'error': 'Failed to update settings'}), 500
+
+@app.route('/api/queues', methods=['GET'])
+def get_all_queues():
+    """Get all queues"""
+    try:
+        queues = queue_manager.get_all_queues()
+        return jsonify({
+            'status': 'success',
+            'queues': queues
+        })
+    
+    except Exception as e:
+        return jsonify({'error': 'Failed to get queues'}), 500
+
+# Original prediction endpoint
 @app.route('/predict', methods=['POST'])
 def predict():
     """API endpoint for wait time prediction"""
@@ -201,12 +313,19 @@ def health_check():
     """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
-        'model_trained': predictor.is_trained
+        'model_trained': predictor.is_trained,
+        'queue_manager': 'active'
     })
 
 if __name__ == '__main__':
     print("Starting Q-Line Wait Time Prediction API...")
     print("Available endpoints:")
     print("  POST /predict - Predict wait time")
+    print("  POST /api/queue/join - Join queue")
+    print("  GET /api/queue/status/<shop_id> - Get queue status")
+    print("  GET /api/customer/status/<customer_id> - Get customer status")
+    print("  POST /api/queue/serve/<shop_id> - Serve next customer")
+    print("  PUT /api/queue/settings/<shop_id> - Update queue settings")
+    print("  GET /api/queues - Get all queues")
     print("  GET /health - Health check")
     app.run(debug=True, host='0.0.0.0', port=5000)
