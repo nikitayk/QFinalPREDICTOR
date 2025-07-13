@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import LandingPage from './components/LandingPage';
 import ClientLogin from './components/ClientLogin';
 import ShopkeeperLogin from './components/ShopkeeperLogin';
-import ClientDashboard from './components/ClientDashboard';
-import ShopkeeperDashboard from './components/ShopkeeperDashboard';
 import './index.css';
 
 const App = () => {
